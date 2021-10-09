@@ -73,7 +73,7 @@ def render_background(ax, altitude, g_values, radius_values):
     ax.set_xticks(np.arange(xmin, xmax, 100))
 
     ax.minorticks_on()
-    ax.grid(b=True, which='minor', color='0.65', linestyle='--')
+    ax.grid(b=True, which='minor', color='0.85', linestyle='--')
     ax.grid(b=True, which='major', color='0.65', linestyle='-')
 
     ax.set_ylabel('Turn Rate (deg/s)')
@@ -96,7 +96,6 @@ def render_background(ax, altitude, g_values, radius_values):
     for mach in np.arange(MachMin, MachMax, 0.2):
         cas = fpsTokt(MachtoCAS(mach, altitude))
         m = CAStoMach(ktTofps(cas), altitude)
-        print(mach - m)
         mach_ticks.append(cas)
         mach_labels.append('{0:.1f}'.format(mach))
     ax2.xaxis.set_ticks(mach_ticks)
@@ -115,7 +114,6 @@ def render_manuever_envelope(ax, aircraft, altitude, weight):
 
     turn_rates = []
     for airspeed in airspeeds:
-        # TODO Check this formula
         turn_rate = g*math.sqrt(aircraft.Maxg**2 - 1)/CAStoTAS(ktTofps(airspeed), altitude)
         turn_rates.append(math.degrees(turn_rate))
 
@@ -157,81 +155,20 @@ def render(aircraft, altitude, weight, g_values, radius_values):
     render_manuever_envelope(ax, aircraft, altitude, weight)
 
     # HACK for now, render_manuever_envelope resets xlim to (75, 825)
-    ax.set_xlim(0, 900)
+    # TODO Should be able to determine these from the max data points, rounded up etc.
+    ax.set_xlim(0, 1200)
+    ax.set_ylim(0, 25)
 
     plt.show()
 
-
-def test2():
-    p = ISAtmosphere.Pressure(20000)
-
-    casrange = range(0, 1200, 100)
-    for cas in casrange:
-        mach = MachFromVcalibrated(ktTofps(cas), p)
-        kcas = fpsTokt(VcalibratedFromMach(mach, p))
-        print('CAS: {0} Mach: {1:.3} KCAS: {2}  Diff: {3:.2e}'.format(cas, mach, kcas, kcas - cas))
-
-def test3():
-    p = ISAtmosphere.Pressure(0)
-
-    machrange = [ -0.1, 0.0, 0.5, 1.0, 1.5 ]
-    for mach in machrange:
-        print('{0} - {1}'.format(mach, VcalibratedFromMach(mach, p)))
-
-def test():
-    casrange = range(0, 1200, 20)
-    mach1 = []
-    mach2 = []
-    mach3 = []
-    mach4 = []
-
-    p = ISAtmosphere.Pressure(20000)
-    psl = ISAtmosphere.sealevel_pressure
-    rhosl = ISAtmosphere.sealevel_density
-
-    for cas in casrange:
-        mach1.append(CAStoMach(ktTofps(cas), 20000))
-        mach2.append(CAStoMach2(ktTofps(cas), 20000))
-        mach3.append(CAStoMach3(ktTofps(cas), 20000))
-        mach4.append(MachFromVcalibrated(ktTofps(cas), p))
-
-    plt.figure()
-    plt.plot(casrange, mach1, color='black', label='Luizmonteiro')
-    #plt.plot(casrange, mach2, color='blue', label='JSBSim')
-    #plt.plot(casrange, mach3, color='red', label='Dennis')
-    plt.plot(casrange, mach4, color='green', label='Bertrand')
-
-    plt.title('MACH vs CAS at 20,000ft')
-    plt.ylabel('MACH')
-    plt.xlabel('CAS')
-
-    plt.legend(loc='upper left')
-
-    plt.show()
-
-"""
-test3()
-test2()
-test()
-
-mach = CAStoMach(ktTofps(900), 20000)
-mach2 = CAStoMach2(ktTofps(900), 20000)
-
-mach = CAStoMach(ktTofps(500), 20000)
-mach3 = CAStoMach3(ktTofps(500), 20000)
-"""
 
 aircraft = F15()
 altitude = 20000
 weight = 39300
 g_values = [1.1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 #radius_values = [1000, 1200, 1500, 2000, 3000, 4000, 5000, 6000, 8000, 10000]
-radius_values = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000]
+#radius_values = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000]
+radius_values = [2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000]
 
 render(aircraft, altitude, weight, g_values, radius_values)
 
-
-for cas in [100, 200, 300, 400, 500, 600, 700, 800, 900, 950, 1000, 1100, 1200]:
-    print('CAS: {0}  Mach: {1}'.format(cas, CAStoMach(ktTofps(cas), 20000)))
-    print('CAS: {0}  Mach: {1}'.format(cas, CAStoMach3(ktTofps(cas), 20000)))
-    #print('CAS: {0}  Mach: {1}'.format(cas, CAStoMach2(ktTofps(cas), 20000)))
