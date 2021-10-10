@@ -10,13 +10,20 @@ class F15:
         self.S = 608
         self.Maxg = 9
         self.Vne = 800
+        self.DragIndex = 12.1
+        self.k = 0.133  # 1/(pi * e * AR)
 
-    def Drag(self, density, tas, mach):
-        return 0
+    def CD0(self, mach):
+        # TODO Add mach effect
+        return 0.023 + self.DragIndex / 1e4
 
-    def Thrust(self, altitude, density, tas, mach):
-        return 46000
+    def Thrust(self, altitude, mach):
+        # TODO Use thrust (altitude, mach) factor table
+        #return 46000
+        return 30000
 
+
+use_impact_pressure = False
 
 g = 32.17405
 
@@ -63,8 +70,8 @@ def plot_g_lines(ax, gs, radii, altitude):
 
 
 def render_background(ax, altitude, g_values, radius_values):
-    ax.set_xlim(xmin=0, xmax=900)
-    ax.set_ylim(ymin=0, ymax=35)
+    ax.set_xlim(xmin=0, xmax=1200)
+    ax.set_ylim(ymin=0, ymax=25)
 
     plot_turn_radius_lines(ax, radius_values, g_values, altitude)
     plot_g_lines(ax, g_values, range(min(radius_values), max(radius_values) + 100, 100), altitude)
@@ -104,9 +111,14 @@ def render_background(ax, altitude, g_values, radius_values):
 
 def render_manuever_envelope(ax, aircraft, altitude, weight):
     # Calculate corner speed
-    corner_speed_tas = math.sqrt((2 * aircraft.Maxg * weight) / (ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S))
-    corner_speed_cas = TAStoCAS(corner_speed_tas, altitude)
-    corner_speed_cas_kt = fpsTokt(corner_speed_cas)
+    if use_impact_pressure:
+        corner_mach = MachFromImpactPressure((aircraft.Maxg * weight)/(aircraft.CLMax * aircraft.S), ISAtmosphere.Pressure(altitude))
+        corner_speed_cas = MachtoCAS(corner_mach, altitude)
+        corner_speed_cas_kt = fpsTokt(corner_speed_cas)
+    else:
+        corner_speed_tas = math.sqrt((2 * aircraft.Maxg * weight) / (ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S))
+        corner_speed_cas = TAStoCAS(corner_speed_tas, altitude)
+        corner_speed_cas_kt = fpsTokt(corner_speed_cas)
 
     # 
     intervals = int((aircraft.Vne - corner_speed_cas_kt) / 10 + 1)
@@ -135,24 +147,72 @@ def render_manuever_envelope(ax, aircraft, altitude, weight):
     turn_rates = []
     for airspeed in airspeeds:
         tas = CAStoTAS(ktTofps(airspeed), altitude)
-        nlf = (0.5 * ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S * tas * tas) / weight
+        if use_impact_pressure:
+            mach = CAStoMach(ktTofps(airspeed), altitude)
+            nlf = (ImpactPressure(mach, altitude) * aircraft.CLMax * aircraft.S) / weight
+        else:
+            nlf = (0.5 * ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S * tas * tas) / weight
         turn_rate = g*math.sqrt(nlf**2 - 1)/tas
         turn_rates.append(math.degrees(turn_rate))
 
     ax.plot(airspeeds, turn_rates, color='red', linewidth=3.0)
 
 
-def render_ps_line(aircraft, altitude, weight):
+def render_ps_line(ax, aircraft, altitude, weight, ps):
+    
+    # TODO Still need to include mach drag increase
+    
+    colorVal = 'green' if ps >= 0 else 'blue'
+
+    # Airspeed range and interval
+    VneTAS = CAStoTAS(ktTofps(aircraft.Vne), altitude)
+    MinTAS = CAStoTAS(ktTofps(100), altitude)
+    intervals = int((VneTAS -  MinTAS) / 10 + 1)
+    airspeeds = np.linspace(MinTAS, VneTAS, intervals)
+
+    CAS_speeds = []
+    turn_rates = []
+
+    for tas in airspeeds:
+        mach = ISAtmosphere.Mach(tas, altitude)
+        Drag = aircraft.Thrust(altitude, mach) - ps * (weight / tas)
+        if use_impact_pressure:
+            q = ImpactPressure(mach, altitude)
+        else:
+            q = 0.5 * ISAtmosphere.Density(altitude) * tas**2
+        InducedDrag = Drag - q * aircraft.CD0(mach) * aircraft.S
+        if InducedDrag > 0:
+            Cl = math.sqrt(InducedDrag / (aircraft.k * q * aircraft.S))
+            Lift = q * Cl * aircraft.S
+            nLF = Lift / weight
+            if nLF > aircraft.Maxg:
+                ax.plot(CAS_speeds, turn_rates, color=colorVal, linewidth=2.0)
+                CAS_speeds.clear()
+                turn_rates.clear()
+            elif nLF > 1.0 and Cl <= aircraft.CLMax:
+                turn_rate = g*math.sqrt(nLF**2 - 1)/tas
+                turn_rates.append(math.degrees(turn_rate))
+                CAS_speeds.append(fpsTokt(TAStoCAS(tas, altitude)))
+
+    ax.plot(CAS_speeds, turn_rates, color=colorVal, linewidth=2.0)
+
     return
 
 
-def render(aircraft, altitude, weight, g_values, radius_values):
+def render_ps_lines(ax, aircraft, altitude, weight, ps_values):
+    for ps in ps_values:
+        render_ps_line(ax, aircraft, altitude, weight, ps)
+
+
+def render(aircraft, altitude, weight, g_values, radius_values, ps_values):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
 
     render_background(ax, altitude, g_values, radius_values)
 
     render_manuever_envelope(ax, aircraft, altitude, weight)
+
+    render_ps_lines(ax, aircraft, altitude, weight, ps_values)
 
     # HACK for now, render_manuever_envelope resets xlim to (75, 825)
     # TODO Should be able to determine these from the max data points, rounded up etc.
@@ -163,12 +223,12 @@ def render(aircraft, altitude, weight, g_values, radius_values):
 
 
 aircraft = F15()
-altitude = 20000
+altitude = 19000
 weight = 39300
-g_values = [1.1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-#radius_values = [1000, 1200, 1500, 2000, 3000, 4000, 5000, 6000, 8000, 10000]
-#radius_values = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000]
-radius_values = [2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000]
 
-render(aircraft, altitude, weight, g_values, radius_values)
+g_values = [1.1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+radius_values = [2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000]
+ps_values = [ 0, 200, 400, 600, -200, -400, -600 ]
+
+render(aircraft, altitude, weight, g_values, radius_values, ps_values)
 

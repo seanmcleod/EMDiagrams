@@ -12,6 +12,10 @@ def PitotTotalPressure(mach, p):
         #factor = (1.2**3.5)*(2.5**2.5)*(2.4**2.5)
         #return p * factor * (mach ** 7) / ((7*mach*mach - 1) ** 2.5)
         
+def ImpactPressure(mach, altitude):
+    pressure = ISAtmosphere.Pressure(altitude)
+    return PitotTotalPressure(mach, pressure) - pressure
+
 
 def MachtoCAS(mach, altitude):
     pressure = ISAtmosphere.Pressure(altitude)
