@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from Atmosphere import ISAtmosphere
 from Conversions import *
@@ -22,6 +23,27 @@ class F15:
         #return 46000
         return 30000
 
+
+class IF35A:
+    def __init__(self):
+        self.CLMax = 1.8
+        self.S = 460
+        self.Maxg = 9
+        self.Vne = 900
+        self.DragIndex = 0
+        self.k = 1/(math.pi * 0.8 * 2.681265)  # 1/(pi * e * AR)
+
+    def CD0(self, mach):
+        # TODO Add mach effect
+        return 0.016 + self.DragIndex / 1e4
+
+    def Thrust(self, altitude, mach):
+        # TODO Use thrust (altitude, mach) factor table
+        return 22000
+
+# Default axes limits
+maxCAS = 1200
+maxTurnRate = 25
 
 use_impact_pressure = False
 
@@ -70,8 +92,8 @@ def plot_g_lines(ax, gs, radii, altitude):
 
 
 def render_background(ax, altitude, g_values, radius_values):
-    ax.set_xlim(xmin=0, xmax=1200)
-    ax.set_ylim(ymin=0, ymax=25)
+    ax.set_xlim(xmin=0, xmax=maxCAS)
+    ax.set_ylim(ymin=0, ymax=maxTurnRate)
 
     plot_turn_radius_lines(ax, radius_values, g_values, altitude)
     plot_g_lines(ax, g_values, range(min(radius_values), max(radius_values) + 100, 100), altitude)
@@ -204,7 +226,7 @@ def render_ps_lines(ax, aircraft, altitude, weight, ps_values):
         render_ps_line(ax, aircraft, altitude, weight, ps)
 
 
-def render(aircraft, altitude, weight, g_values, radius_values, ps_values):
+def render(aircraft, altitude, weight, g_values, radius_values, ps_values, legend):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
 
@@ -216,8 +238,14 @@ def render(aircraft, altitude, weight, g_values, radius_values, ps_values):
 
     # HACK for now, render_manuever_envelope resets xlim to (75, 825)
     # TODO Should be able to determine these from the max data points, rounded up etc.
-    ax.set_xlim(0, 1200)
-    ax.set_ylim(0, 25)
+    ax.set_xlim(0, maxCAS)
+    ax.set_ylim(0, maxTurnRate)
+
+    # TODO Can generate most of entries automatically
+    patches = []
+    for line in legend:
+        patches.append(mpatches.Patch(color='white', label=line))
+    plt.legend(handles=patches)
 
     plt.show()
 
@@ -229,6 +257,18 @@ weight = 39300
 g_values = [1.1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 radius_values = [2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000]
 ps_values = [ 0, 200, 400, 600, -200, -400, -600 ]
+legend = ['F-15C, 19k, ISA', 'DI=12.1, 39.3k lbs', 'Max A/B']
 
-render(aircraft, altitude, weight, g_values, radius_values, ps_values)
+render(aircraft, altitude, weight, g_values, radius_values, ps_values, legend)
 
+
+aircraft = IF35A()
+altitude = 15000
+weight = 38000
+
+radius_values = [1500, 2000, 4000, 6000, 8000, 10000, 20000]
+ps_values = [ 0, 100, 200, -200, -500 ]
+
+maxTurnRate = 30
+
+render(aircraft, altitude, weight, g_values, radius_values, ps_values, ['IF-35A, 15k, ISA', 'DI=0, 38k lbs', 'MIL power'])
