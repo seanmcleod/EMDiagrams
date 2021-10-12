@@ -45,8 +45,6 @@ class IF35A:
 maxCAS = 1200
 maxTurnRate = 25
 
-use_impact_pressure = False
-
 g = 32.17405
 
 font = {'family': 'Times New Roman',
@@ -133,14 +131,9 @@ def render_background(ax, altitude, g_values, radius_values):
 
 def render_manuever_envelope(ax, aircraft, altitude, weight):
     # Calculate corner speed
-    if use_impact_pressure:
-        corner_mach = MachFromImpactPressure((aircraft.Maxg * weight)/(aircraft.CLMax * aircraft.S), ISAtmosphere.Pressure(altitude))
-        corner_speed_cas = MachtoCAS(corner_mach, altitude)
-        corner_speed_cas_kt = fpsTokt(corner_speed_cas)
-    else:
-        corner_speed_tas = math.sqrt((2 * aircraft.Maxg * weight) / (ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S))
-        corner_speed_cas = TAStoCAS(corner_speed_tas, altitude)
-        corner_speed_cas_kt = fpsTokt(corner_speed_cas)
+    corner_speed_tas = math.sqrt((2 * aircraft.Maxg * weight) / (ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S))
+    corner_speed_cas = TAStoCAS(corner_speed_tas, altitude)
+    corner_speed_cas_kt = fpsTokt(corner_speed_cas)
 
     # 
     intervals = int((aircraft.Vne - corner_speed_cas_kt) / 10 + 1)
@@ -169,11 +162,7 @@ def render_manuever_envelope(ax, aircraft, altitude, weight):
     turn_rates = []
     for airspeed in airspeeds:
         tas = CAStoTAS(ktTofps(airspeed), altitude)
-        if use_impact_pressure:
-            mach = CAStoMach(ktTofps(airspeed), altitude)
-            nlf = (ImpactPressure(mach, altitude) * aircraft.CLMax * aircraft.S) / weight
-        else:
-            nlf = (0.5 * ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S * tas * tas) / weight
+        nlf = (0.5 * ISAtmosphere.Density(altitude) * aircraft.CLMax * aircraft.S * tas * tas) / weight
         turn_rate = g*math.sqrt(nlf**2 - 1)/tas
         turn_rates.append(math.degrees(turn_rate))
 
@@ -198,10 +187,7 @@ def render_ps_line(ax, aircraft, altitude, weight, ps):
     for tas in airspeeds:
         mach = ISAtmosphere.Mach(tas, altitude)
         Drag = aircraft.Thrust(altitude, mach) - ps * (weight / tas)
-        if use_impact_pressure:
-            q = ImpactPressure(mach, altitude)
-        else:
-            q = 0.5 * ISAtmosphere.Density(altitude) * tas**2
+        q = 0.5 * ISAtmosphere.Density(altitude) * tas**2
         InducedDrag = Drag - q * aircraft.CD0(mach) * aircraft.S
         if InducedDrag > 0:
             Cl = math.sqrt(InducedDrag / (aircraft.k * q * aircraft.S))
@@ -225,6 +211,8 @@ def render_ps_lines(ax, aircraft, altitude, weight, ps_values):
     for ps in ps_values:
         render_ps_line(ax, aircraft, altitude, weight, ps)
 
+    # Custom text label option
+    #ax.text(440, 11.5, '0 FPS', rotation=-20)
 
 def render(aircraft, altitude, weight, g_values, radius_values, ps_values, legend):
     fig = plt.figure()
