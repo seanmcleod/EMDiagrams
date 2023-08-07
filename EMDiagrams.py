@@ -100,8 +100,8 @@ def render_background(ax, altitude, g_values, radius_values):
     ax.set_xticks(np.arange(xmin, xmax, 100))
 
     ax.minorticks_on()
-    ax.grid(b=True, which='minor', color='0.85', linestyle='--')
-    ax.grid(b=True, which='major', color='0.65', linestyle='-')
+    ax.grid(visible=True, which='minor', color='0.85', linestyle='--')
+    ax.grid(visible=True, which='major', color='0.65', linestyle='-')
 
     ax.set_ylabel('Turn Rate (deg/s)')
     ax.set_xlabel('Calibrated Airspeed (kt)')
@@ -189,7 +189,7 @@ def render_ps_line(ax, aircraft, altitude, weight, ps):
         Drag = aircraft.Thrust(altitude, mach) - ps * (weight / tas)
         q = 0.5 * ISAtmosphere.Density(altitude) * tas**2
         InducedDrag = Drag - q * aircraft.CD0(mach) * aircraft.S
-        if InducedDrag > 0:
+        if InducedDrag >= 0:
             Cl = math.sqrt(InducedDrag / (aircraft.k * q * aircraft.S))
             Lift = q * Cl * aircraft.S
             nLF = Lift / weight
@@ -197,7 +197,7 @@ def render_ps_line(ax, aircraft, altitude, weight, ps):
                 ax.plot(CAS_speeds, turn_rates, color=colorVal, linewidth=2.0)
                 CAS_speeds.clear()
                 turn_rates.clear()
-            elif nLF > 1.0 and Cl <= aircraft.CLMax:
+            elif nLF >= 1.0 and Cl <= aircraft.CLMax:
                 turn_rate = g*math.sqrt(nLF**2 - 1)/tas
                 turn_rates.append(math.degrees(turn_rate))
                 CAS_speeds.append(fpsTokt(TAStoCAS(tas, altitude)))
